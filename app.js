@@ -563,6 +563,7 @@ function initEvents() {
   // Status cycle button
   document.addEventListener("click", (e) => {
     if (e.target.matches(".status-cycle-btn")) {
+      e.stopPropagation();
       const taskId = e.target.dataset.taskId;
       const currentStatus = e.target.dataset.status;
       const statusCycle = ["todo", "progress", "done"];
