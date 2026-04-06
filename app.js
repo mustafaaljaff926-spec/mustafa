@@ -161,7 +161,11 @@ function renderBoard() {
                   <span class="tag">${STATUS_META[task.status]}</span>
                   <span class="tag">${priorityLabel(task.priority)}</span>
                   ${task.due ? `<span class="tag tag-due">Due ${task.due}</span>` : ""}
-                  <button class="status-btn" data-task-id="${task.id}" title="Change status">▶</button>
+                  <select class="status-select" data-task-id="${task.id}" ${!isAdmin() ? 'disabled' : ''}>
+                    <option value="todo" ${task.status === 'todo' ? 'selected' : ''}>To do</option>
+                    <option value="progress" ${task.status === 'progress' ? 'selected' : ''}>In progress</option>
+                    <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done</option>
+                  </select>
                 </div>
               </article>`
             )
@@ -476,18 +480,16 @@ function initEvents() {
     btn.addEventListener("click", () => els.memberModal.close());
   });
 
-  // Status change button
-  document.addEventListener("click", (e) => {
-    if (e.target.matches(".status-btn")) {
+  // Status change dropdown
+  document.addEventListener("change", (e) => {
+    if (e.target.matches(".status-select")) {
       const taskId = e.target.dataset.taskId;
+      const newStatus = e.target.value;
       const task = state.tasks.find((t) => t.id === taskId);
       if (!task || !isAdmin()) return;
-      const statuses = ["todo", "progress", "done"];
-      const currentIndex = statuses.indexOf(task.status);
-      const nextIndex = (currentIndex + 1) % statuses.length;
-      task.status = statuses[nextIndex];
+      task.status = newStatus;
       // Update server
-      api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: task.status }) });
+      api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
       renderAll();
     }
   });
