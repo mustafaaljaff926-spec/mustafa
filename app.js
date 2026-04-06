@@ -2,6 +2,7 @@ const state = {
   tasks: [],
   pendingTasks: [],
   members: [],
+  users: [],
   editingTaskId: null,
   view: "kanban",
   filter: "all",
@@ -33,6 +34,7 @@ const els = {
   btnNewTask: document.getElementById("btnNewTask"),
   btnNewTaskBottom: document.getElementById("btnNewTaskBottom"),
   btnThemeToggle: document.getElementById("btnThemeToggle"),
+  btnLogout: document.getElementById("btnLogout"),
   searchInput: document.getElementById("searchInput"),
   loginModal: document.getElementById("loginModal"),
   loginForm: document.getElementById("loginForm"),
@@ -310,55 +312,58 @@ function renderList() {
 }
 
 function renderMembers() {
-  els.addMemberForm.hidden = !isAdmin();
-  els.quickAddMember.hidden = !isAdmin();
+  // Mini member list (in sidebar)
   els.teamListMini.innerHTML = state.members
     .map((m) => `<li><span class="avatar">${m.name.slice(0, 1).toUpperCase()}</span><span class="name">${m.name}</span><span class="dot ${m.role === 'admin' ? 'dot--admin' : ''}"></span></li>`)
     .join("");
 
-  els.teamListFull.innerHTML = state.members
-    .map(
-      (m) => `
-      <li>
-        <span class="avatar">${m.name.slice(0, 1).toUpperCase()}</span>
-        <span class="info"><strong>${m.name}</strong></span>
-        ${isAdmin()
-          ? `<select class="member-role-select" data-member-id="${m.id}">
-              <option value="member" ${m.role === 'member' ? 'selected' : ''}>Member</option>
-              <option value="admin" ${m.role === 'admin' ? 'selected' : ''}>Admin</option>
-            </select>`
-          : `<span class="role-label">${m.role || 'member'}</span>`}
-        <button class="remove" type="button" data-member-id="${m.id}" ${!isAdmin() ? "hidden" : ""}>Remove</button>
-      </li>`
-    )
-    .join("");
+  // Full user list (Team section)
+  els.teamListFull.innerHTML = state.users.length === 0 
+    ? `<p style="padding:16px;text-align:center;color:var(--text-muted);">No team members yet</p>`
+    : state.users
+      .map(
+        (user) => `
+        <li class="team-user-item">
+          <span class="avatar">${user.username.slice(0, 1).toUpperCase()}</span>
+          <div class="team-user-info">
+            <strong>${user.username}</strong>
+            <span style="display:block;font-size:12px;color:var(--text-muted);margin-top:4px;">${user.role}</span>
+          </div>
+          ${isAdmin() ? `
+          <select class="team-role-select" data-user-id="${user.id}" data-username="${user.username}" style="min-width:120px;">
+            <option value="member" ${user.role === 'member' ? 'selected' : ''}>Member</option>
+            <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
+          </select>
+          ` : ''}
+        </li>`
+      )
+      .join("");
 
+  // Add role change handlers (admin only)
+  if (isAdmin()) {
+    els.teamListFull.querySelectorAll(".team-role-select").forEach((sel) => {
+      sel.addEventListener("change", async (e) => {
+        const userId = sel.dataset.userId;
+        const username = sel.dataset.username;
+        const newRole = sel.value;
+        
+        try {
+          await api(`/api/users/${userId}/role`, { method: "PATCH", body: JSON.stringify({ role: newRole }) });
+          await refreshState();
+          showToast(`${username} is now a ${newRole}!`, "success");
+        } catch (err) {
+          showToast(err.message || "Could not update role", "error");
+          await refreshState();
+        }
+      });
+    });
+  }
+
+  // Task assignment checkboxes (from old members for backward compatibility)
   els.assignCheckboxes.innerHTML = state.members
     .map((m) => `<label><input type="checkbox" value="${m.id}" /><span>${m.name}</span></label>`)
     .join("");
-
-  els.teamListFull.querySelectorAll(".remove").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!isAdmin()) return;
-      await api(`/api/members/${btn.dataset.memberId}`, { method: "DELETE" });
-      await refreshState();
-    });
-  });
-
-  // Role change handlers (admin only)
-  els.teamListFull.querySelectorAll(".member-role-select").forEach((sel) => {
-    sel.addEventListener("change", async (e) => {
-      const memberId = sel.dataset.memberId;
-      const newRole = sel.value;
-      try {
-        await api(`/api/members/${memberId}/role`, { method: "PATCH", body: JSON.stringify({ role: newRole }) });
-        await refreshState();
-      } catch (err) {
-        alert(err.message || "Could not update role");
-        await refreshState();
-      }
-    });
-  });
+}
 }
 
 function renderApprovals() {
@@ -490,6 +495,15 @@ async function refreshState() {
   state.tasks = payload.tasks || [];
   state.members = payload.members || [];
   state.pendingTasks = payload.pendingTasks || [];
+  
+  // Fetch users for team display
+  try {
+    const usersPayload = await api("/api/users");
+    state.users = usersPayload.users || [];
+  } catch (err) {
+    state.users = [];
+  }
+  
   syncCurrentMemberId();
   renderAll();
 }
@@ -655,6 +669,10 @@ function initEvents() {
   els.btnThemeToggle.addEventListener("click", () => {
     const html = document.documentElement;
     html.dataset.theme = html.dataset.theme === "light" ? "dark" : "light";
+  });
+
+  els.btnLogout.addEventListener("click", () => {
+    logout();
   });
 
   els.searchInput.addEventListener("input", (e) => {

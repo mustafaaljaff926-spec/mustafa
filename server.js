@@ -167,6 +167,38 @@ function verifyPassword(pwd, hash) {
   return hashPassword(pwd) === hash;
 }
 
+app.get("/api/users", async (_req, res) => {
+  try {
+    if (hasPostgres) {
+      const result = await pool.query("SELECT id, username, role FROM users ORDER BY created_at DESC");
+      return res.json({ users: result.rows });
+    }
+    // Return empty for demo mode (users stored in auth only)
+    res.json({ users: [] });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to fetch users." });
+  }
+});
+
+app.patch("/api/users/:id/role", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    if (!id || !role) return res.status(400).json({ error: "User ID and role are required." });
+    
+    if (hasPostgres) {
+      await pool.query("UPDATE users SET role = $1 WHERE id = $2", [role, id]);
+      const result = await pool.query("SELECT id, username, role FROM users WHERE id = $1", [id]);
+      if (!result.rowCount) return res.status(404).json({ error: "User not found." });
+      return res.json(result.rows[0]);
+    }
+    
+    res.status(400).json({ error: "Role updates require PostgreSQL." });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to update user role." });
+  }
+});
+
 app.get("/api/state", async (_req, res) => {
   const db = await readDb();
   res.json(db);
