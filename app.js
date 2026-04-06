@@ -73,7 +73,7 @@ const els = {
 const STATUS_META = { todo: "To do", progress: "In progress", done: "Done" };
 
 const priorityLabel = (priority) => (priority === "high" ? "High" : "Normal");
-const isAdmin = () => state.role === "admin";
+const isAdmin = () => true;
 
 // Toast notification system
 function showToast(message, type = "info", duration = 3000) {
@@ -138,10 +138,7 @@ async function api(path, options = {}) {
 }
 
 function filteredTasks() {
-  const visibleTasks = isAdmin()
-    ? state.tasks
-    : state.tasks.filter((t) => state.currentMemberId && t.assignees.includes(state.currentMemberId));
-  let filtered = visibleTasks;
+  let filtered = state.tasks;
   if (state.filter === "high") filtered = filtered.filter((t) => t.priority === "high");
   if (state.filter === "dueSoon") {
     const now = new Date();
@@ -166,36 +163,14 @@ function renderRoleBar() {
     bar.style.marginRight = "8px";
     bar.innerHTML = `
       <input id="userNameInput" type="text" placeholder="Your name" style="height:38px;padding:0 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);min-width:120px;" />
-      <select id="roleSelect" style="height:38px;padding:0 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);">
-        <option value="member">Member</option>
-        <option value="admin">Admin</option>
-      </select>
     `;
     els.mainActions.prepend(bar);
-    bar.querySelector("#roleSelect").addEventListener("change", (e) => {
-      state.role = e.target.value;
-      localStorage.setItem("dashboardRole", state.role);
-      if (state.role !== "admin" && state.view === "approvals") state.view = "kanban";
-      renderAll();
-    });
     bar.querySelector("#userNameInput").addEventListener("change", (e) => {
       state.userName = e.target.value.trim() || "Member";
       localStorage.setItem("dashboardUserName", state.userName);
       syncCurrentMemberId();
       renderAll();
     });
-  }
-  const roleSelect = bar.querySelector("#roleSelect");
-  if (state.userName === "owner") {
-    state.role = "admin";
-    localStorage.setItem("dashboardRole", "admin");
-    roleSelect.value = "admin";
-    roleSelect.disabled = true;
-    roleSelect.title = "Owner is always admin";
-  } else {
-    roleSelect.disabled = false;
-    roleSelect.title = "";
-    roleSelect.value = state.role;
   }
   bar.querySelector("#userNameInput").value = state.userName;
   bar.querySelector("#userNameInput").disabled = true;
@@ -217,7 +192,7 @@ function renderBoard() {
               <article class="task-card ${task.priority === "high" ? "task-card--high" : ""}" data-task-id="${task.id}" draggable="true">
                 <div class="task-card-header">
                   <h3 class="task-card-title">${task.title}</h3>
-                  <button class="status-cycle-btn ${!isAdmin() ? 'disabled' : ''}" data-task-id="${task.id}" data-status="${task.status}" title="Click to advance status">
+                  <button class="status-cycle-btn" data-task-id="${task.id}" data-status="${task.status}" title="Click to advance status">
                     ${STATUS_META[task.status]}
                   </button>
                 </div>
@@ -252,7 +227,7 @@ function renderBoard() {
       const newStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
       
       const task = state.tasks.find((t) => t.id === taskId);
-      if (!task || !isAdmin()) return;
+      if (!task) return;
       
       task.status = newStatus;
       btn.dataset.status = newStatus;
@@ -274,7 +249,6 @@ function renderBoard() {
       dragClass: "sortable-drag",
       forceFallback: false,
       onEnd: async (evt) => {
-        if (!isAdmin()) return;
         const taskId = evt.item.dataset.taskId;
         const newStatus = evt.to.dataset.droppable;
         const task = state.tasks.find((t) => t.id === taskId);
@@ -368,11 +342,6 @@ function renderMembers() {
 }
 
 function renderApprovals() {
-  if (!isAdmin()) {
-    els.approvalsList.innerHTML = "";
-    els.approvalsEmpty.hidden = false;
-    return;
-  }
   els.approvalsList.innerHTML = state.pendingTasks
     .map(
       (p) => `
@@ -426,7 +395,6 @@ function renderHeader() {
 }
 
 function renderViews() {
-  if (!isAdmin() && state.view === "approvals") state.view = "kanban";
   Object.entries(els.views).forEach(([k, viewEl]) => {
     viewEl.hidden = k !== state.view;
   });
@@ -446,7 +414,6 @@ function renderBadges() {
   els.badgeListCount.textContent = String(visibleTasks.length);
   els.badgeHighCount.textContent = String(visibleTasks.filter((t) => t.priority === "high").length);
   els.badgePendingCount.textContent = String(state.pendingTasks.length);
-  els.navApprovals.hidden = !isAdmin();
 }
 
 function renderAll() {
@@ -459,11 +426,10 @@ function renderAll() {
   renderViews();
   renderFilters();
   renderBadges();
-  els.taskSubmitBtn.textContent = isAdmin() ? "Save" : "Send request";
+  els.taskSubmitBtn.textContent = "Save";
 }
 
 function openTaskModal(taskId = null) {
-  if (!isAdmin() && taskId) return;
   state.editingTaskId = taskId;
   const task = taskId ? state.tasks.find((t) => t.id === taskId) : null;
   els.taskModalTitle.textContent = task ? "Edit task" : "New task";
@@ -578,21 +544,15 @@ function initEvents() {
     if (!payload.title) return;
 
     try {
-      if (state.editingTaskId && isAdmin()) {
+      if (state.editingTaskId) {
         await api(`/api/tasks/${state.editingTaskId}`, { method: "PATCH", body: JSON.stringify(payload) });
         showToast("Task updated successfully!", "success");
-      } else if (isAdmin()) {
+      } else {
         await api("/api/tasks", {
           method: "POST",
           body: JSON.stringify(payload),
         });
         showToast("Task created!", "success");
-      } else {
-        await api("/api/tasks/request", {
-          method: "POST",
-          body: JSON.stringify({ ...payload, requester: state.userName || "Member" }),
-        });
-        showToast("Task request sent to admin for approval!", "info");
       }
       closeTaskModal();
       await refreshState();
@@ -628,7 +588,6 @@ function initEvents() {
   });
 
   els.addMemberForm.addEventListener("submit", async (e) => {
-    if (!isAdmin()) return;
     e.preventDefault();
     const name = els.newMemberName.value.trim();
     if (!name) return;
@@ -644,13 +603,11 @@ function initEvents() {
   });
 
   els.quickAddMember.addEventListener("click", () => {
-    if (!isAdmin()) return;
     els.memberModal.showModal();
     els.quickMemberName.value = "";
     els.quickMemberName.focus();
   });
   els.memberQuickForm.addEventListener("submit", async (e) => {
-    if (!isAdmin()) return;
     e.preventDefault();
     const name = els.quickMemberName.value.trim();
     if (!name) return;
