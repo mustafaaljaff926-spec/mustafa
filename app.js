@@ -78,10 +78,13 @@ function showToast(message, type = "info", duration = 3000) {
   toast.className = `toast toast-${type}`;
   toast.textContent = message;
   els.toastContainer.appendChild(toast);
+  
+  // Trigger animation after adding to DOM
   setTimeout(() => {
-    toast.classList.add("toast--show");
+    // Animation plays automatically from CSS
     setTimeout(() => {
-      toast.classList.remove("toast--show");
+      // After duration, start exit animation
+      toast.classList.add("toast--show");
       setTimeout(() => toast.remove(), 300);
     }, duration);
   }, 10);
@@ -233,10 +236,6 @@ function renderBoard() {
       if (e.target.closest(".status-cycle-btn")) return;
       openTaskModal(card.dataset.taskId);
     });
-    card.addEventListener("dragstart", (e) => {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("taskId", card.dataset.taskId);
-    });
   });
 
   // Status cycle button handlers
@@ -263,26 +262,26 @@ function renderBoard() {
     });
   });
 
+  // Initialize Sortable.js for drag-and-drop between columns
   els.board.querySelectorAll("[data-droppable]").forEach((zone) => {
-    zone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      zone.classList.add("drag-over");
-    });
-    zone.addEventListener("dragleave", () => {
-      zone.classList.remove("drag-over");
-    });
-    zone.addEventListener("drop", async (e) => {
-      e.preventDefault();
-      zone.classList.remove("drag-over");
-      const taskId = e.dataTransfer.getData("taskId");
-      const newStatus = zone.dataset.droppable;
-      const task = state.tasks.find((t) => t.id === taskId);
-      if (task && isAdmin()) {
-        task.status = newStatus;
-        await api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
-        renderAll();
-        showToast("Task moved!", "success");
+    Sortable.create(zone, {
+      group: "tasks",
+      animation: 200,
+      ghostClass: "sortable-ghost",
+      dragClass: "sortable-drag",
+      forceFallback: false,
+      onEnd: async (evt) => {
+        if (!isAdmin()) return;
+        const taskId = evt.item.dataset.taskId;
+        const newStatus = evt.to.dataset.droppable;
+        const task = state.tasks.find((t) => t.id === taskId);
+        
+        if (task && task.status !== newStatus) {
+          task.status = newStatus;
+          await api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
+          renderAll();
+          showToast(`Task moved to ${STATUS_META[newStatus]}!`, "success");
+        }
       }
     });
   });
@@ -386,14 +385,24 @@ function renderApprovals() {
 
   els.approvalsList.querySelectorAll("[data-approve-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await api(`/api/tasks/approve/${btn.dataset.approveId}`, { method: "POST" });
-      await refreshState();
+      try {
+        await api(`/api/tasks/approve/${btn.dataset.approveId}`, { method: "POST" });
+        showToast("Task approved and added to board!", "success");
+        await refreshState();
+      } catch (err) {
+        showToast("Could not approve task", "error");
+      }
     });
   });
   els.approvalsList.querySelectorAll("[data-reject-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      await api(`/api/tasks/reject/${btn.dataset.rejectId}`, { method: "DELETE" });
-      await refreshState();
+      try {
+        await api(`/api/tasks/reject/${btn.dataset.rejectId}`, { method: "DELETE" });
+        showToast("Task request rejected", "info");
+        await refreshState();
+      } catch (err) {
+        showToast("Could not reject task", "error");
+      }
     });
   });
 }
@@ -486,8 +495,55 @@ async function refreshState() {
 }
 
 function initEvents() {
-  state.userName = "owner";
-  state.role = "admin";
+  // Check for existing auth token
+  const authToken = localStorage.getItem("authToken");
+  const authUser = localStorage.getItem("authUser");
+  
+  if (authToken && authUser) {
+    const user = JSON.parse(authUser);
+    state.userName = user.username;
+    state.role = "admin";
+  } else {
+    // Show login modal if not authenticated
+    state.userName = "";
+    state.role = "member";
+    els.loginModal.showModal();
+  }
+  
+  // Login form submission
+  if (els.loginForm) {
+    els.loginForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const username = els.loginUsername.value.trim();
+      const password = els.loginPassword.value.trim();
+      const isSignup = els.loginSubmitBtn.textContent === "Sign up";
+      
+      if (!username || !password) {
+        showToast("Username and password required", "error");
+        return;
+      }
+      
+      await login(username, password, isSignup);
+    });
+  }
+  
+  // Toggle between login and signup
+  if (els.signupToggleBtn) {
+    els.signupToggleBtn.addEventListener("click", () => {
+      const isSignup = els.loginSubmitBtn.textContent === "Log in";
+      els.loginSubmitBtn.textContent = isSignup ? "Sign up" : "Log in";
+      els.signupToggleBtn.textContent = isSignup ? "Already have account? Log in" : "Don't have account? Sign up";
+    });
+  }
+  
+  // Logout handler (if logout button exists)
+  const logoutBtn = document.querySelector("[data-logout]");
+  if (logoutBtn) {
+    logoutBtn.addEventListener("click", logout);
+  }
+
+  state.userName = state.userName || "owner";
+  state.role = state.role || "admin";
   localStorage.setItem("dashboardUserName", state.userName);
   localStorage.setItem("dashboardRole", state.role);
 
@@ -510,30 +566,37 @@ function initEvents() {
     try {
       if (state.editingTaskId && isAdmin()) {
         await api(`/api/tasks/${state.editingTaskId}`, { method: "PATCH", body: JSON.stringify(payload) });
+        showToast("Task updated successfully!", "success");
       } else if (isAdmin()) {
         await api("/api/tasks", {
           method: "POST",
           body: JSON.stringify(payload),
         });
+        showToast("Task created!", "success");
       } else {
         await api("/api/tasks/request", {
           method: "POST",
           body: JSON.stringify({ ...payload, requester: state.userName || "Member" }),
         });
-        alert("Task request sent to admin for approval.");
+        showToast("Task request sent to admin for approval!", "info");
       }
       closeTaskModal();
       await refreshState();
     } catch (err) {
-      alert(err.message || "Could not save task.");
+      showToast(err.message || "Could not save task.", "error");
     }
   });
 
   els.taskDeleteBtn.addEventListener("click", async () => {
     if (!state.editingTaskId || !isAdmin()) return;
-    await api(`/api/tasks/${state.editingTaskId}`, { method: "DELETE" });
-    closeTaskModal();
-    await refreshState();
+    try {
+      await api(`/api/tasks/${state.editingTaskId}`, { method: "DELETE" });
+      showToast("Task deleted!", "success");
+      closeTaskModal();
+      await refreshState();
+    } catch (err) {
+      showToast("Could not delete task", "error");
+    }
   });
 
   document.querySelectorAll("[data-close-modal]").forEach((btn) => btn.addEventListener("click", closeTaskModal));
@@ -557,8 +620,9 @@ function initEvents() {
     if (!name) return;
     try {
       await api("/api/members", { method: "POST", body: JSON.stringify({ name }) });
+      showToast(`Added ${name} to team!`, "success");
     } catch (err) {
-      alert(err.message || "Could not add member.");
+      showToast(err.message || "Could not add member.", "error");
       return;
     }
     els.newMemberName.value = "";
@@ -578,10 +642,11 @@ function initEvents() {
     if (!name) return;
     try {
       await api("/api/members", { method: "POST", body: JSON.stringify({ name }) });
+      showToast(`Added ${name} to team!`, "success");
       els.memberModal.close();
       await refreshState();
     } catch (err) {
-      alert(err.message || "Could not add member.");
+      showToast(err.message || "Could not add member.", "error");
     }
   });
   document.querySelectorAll("[data-close-member]").forEach((btn) => {

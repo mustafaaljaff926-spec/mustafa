@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "express": "latest",
-    "pg": "latest"
+    "pg": "latest",
+    "sortablejs": "^1.15.7"
   },
   "devDependencies": {
     "vite": "latest"
