@@ -339,7 +339,6 @@ function renderMembers() {
     .map((m) => `<label><input type="checkbox" value="${m.id}" /><span>${m.name}</span></label>`)
     .join("");
 }
-}
 
 function renderApprovals() {
   els.approvalsList.innerHTML = state.pendingTasks
