@@ -34,6 +34,13 @@ const els = {
   btnNewTaskBottom: document.getElementById("btnNewTaskBottom"),
   btnThemeToggle: document.getElementById("btnThemeToggle"),
   searchInput: document.getElementById("searchInput"),
+  loginModal: document.getElementById("loginModal"),
+  loginForm: document.getElementById("loginForm"),
+  loginUsername: document.getElementById("loginUsername"),
+  loginPassword: document.getElementById("loginPassword"),
+  loginSubmitBtn: document.getElementById("loginSubmitBtn"),
+  signupToggleBtn: document.getElementById("signupToggleBtn"),
+  toastContainer: document.getElementById("toastContainer"),
   addMemberForm: document.getElementById("addMemberForm"),
   newMemberName: document.getElementById("newMemberName"),
   quickAddMember: document.getElementById("quickAddMember"),
@@ -64,6 +71,52 @@ const STATUS_META = { todo: "To do", progress: "In progress", done: "Done" };
 
 const priorityLabel = (priority) => (priority === "high" ? "High" : "Normal");
 const isAdmin = () => state.role === "admin";
+
+// Toast notification system
+function showToast(message, type = "info", duration = 3000) {
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  els.toastContainer.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("toast--show");
+    setTimeout(() => {
+      toast.classList.remove("toast--show");
+      setTimeout(() => toast.remove(), 300);
+    }, duration);
+  }, 10);
+}
+
+// Authentication helpers
+async function login(username, password, isSignup = false) {
+  try {
+    const endpoint = isSignup ? "/api/signup" : "/api/login";
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Auth failed");
+    localStorage.setItem("authToken", data.token);
+    localStorage.setItem("authUser", JSON.stringify(data.user));
+    state.userName = data.user.username;
+    state.role = "admin";
+    els.loginModal.close();
+    renderAll();
+    showToast(`Welcome, ${username}!`, "success");
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+function logout() {
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("authUser");
+  state.userName = "";
+  state.role = "member";
+  els.loginModal.showModal();
+}
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -149,23 +202,22 @@ function renderBoard() {
     .map((status) => {
       const inCol = tasks.filter((t) => t.status === status);
       return `
-      <article class="column column--${status}">
+      <article class="column column--${status}" data-status="${status}">
         <header class="column-head"><span>${STATUS_META[status]}</span><span class="count">${inCol.length}</span></header>
-        <div class="column-body">
+        <div class="column-body" data-droppable="${status}">
           ${inCol
             .map(
               (task) => `
-              <article class="task-card ${task.priority === "high" ? "task-card--high" : ""}" data-task-id="${task.id}">
-                <h3 class="task-card-title">${task.title}</h3>
+              <article class="task-card ${task.priority === "high" ? "task-card--high" : ""}" data-task-id="${task.id}" draggable="true">
+                <div class="task-card-header">
+                  <h3 class="task-card-title">${task.title}</h3>
+                  <button class="status-cycle-btn ${!isAdmin() ? 'disabled' : ''}" data-task-id="${task.id}" data-status="${task.status}" title="Click to advance status">
+                    ${STATUS_META[task.status]}
+                  </button>
+                </div>
                 <div class="task-card-meta">
-                  <span class="tag">${STATUS_META[task.status]}</span>
                   <span class="tag">${priorityLabel(task.priority)}</span>
                   ${task.due ? `<span class="tag tag-due">Due ${task.due}</span>` : ""}
-                  <select class="status-select" data-task-id="${task.id}" ${!isAdmin() ? 'disabled' : ''}>
-                    <option value="todo" ${task.status === 'todo' ? 'selected' : ''}>To do</option>
-                    <option value="progress" ${task.status === 'progress' ? 'selected' : ''}>In progress</option>
-                    <option value="done" ${task.status === 'done' ? 'selected' : ''}>Done</option>
-                  </select>
                 </div>
               </article>`
             )
@@ -177,6 +229,34 @@ function renderBoard() {
 
   els.board.querySelectorAll(".task-card").forEach((card) => {
     card.addEventListener("click", () => openTaskModal(card.dataset.taskId));
+    card.addEventListener("dragstart", (e) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("taskId", card.dataset.taskId);
+    });
+  });
+
+  els.board.querySelectorAll("[data-droppable]").forEach((zone) => {
+    zone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      zone.classList.add("drag-over");
+    });
+    zone.addEventListener("dragleave", () => {
+      zone.classList.remove("drag-over");
+    });
+    zone.addEventListener("drop", async (e) => {
+      e.preventDefault();
+      zone.classList.remove("drag-over");
+      const taskId = e.dataTransfer.getData("taskId");
+      const newStatus = zone.dataset.droppable;
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (task && isAdmin()) {
+        task.status = newStatus;
+        await api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
+        renderAll();
+        showToast("Task moved!", "success");
+      }
+    });
   });
 }
 
@@ -480,17 +560,26 @@ function initEvents() {
     btn.addEventListener("click", () => els.memberModal.close());
   });
 
-  // Status change dropdown
-  document.addEventListener("change", (e) => {
-    if (e.target.matches(".status-select")) {
+  // Status cycle button
+  document.addEventListener("click", (e) => {
+    if (e.target.matches(".status-cycle-btn")) {
       const taskId = e.target.dataset.taskId;
-      const newStatus = e.target.value;
+      const currentStatus = e.target.dataset.status;
+      const statusCycle = ["todo", "progress", "done"];
+      const currentIdx = statusCycle.indexOf(currentStatus);
+      const newStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
+      
       const task = state.tasks.find((t) => t.id === taskId);
       if (!task || !isAdmin()) return;
+      
       task.status = newStatus;
+      e.target.dataset.status = newStatus;
+      e.target.textContent = STATUS_META[newStatus];
+      
       // Update server
       api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
       renderAll();
+      showToast(`Task moved to ${STATUS_META[newStatus]}`, "success");
     }
   });
 

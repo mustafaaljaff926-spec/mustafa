@@ -21,8 +21,57 @@ const pool = hasPostgres
 const app = express();
 app.use(express.json());
 
+// Login endpoint
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required." });
+    
+    if (hasPostgres) {
+      const result = await pool.query("SELECT id, username FROM users WHERE username = $1 AND password_hash = $2", [username, hashPassword(password)]);
+      if (!result.rowCount) return res.status(401).json({ error: "Invalid credentials." });
+      return res.json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
+    }
+    
+    // Demo: allow any username/password (for local testing)
+    res.json({ user: { id: createId(), username }, token: `token_${Date.now()}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Login failed." });
+  }
+});
+
+// Signup endpoint (creates user or returns existing)
+app.post("/api/signup", async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) return res.status(400).json({ error: "Username and password required." });
+    
+    const userId = createId();
+    const user = { id: userId, username };
+    
+    if (hasPostgres) {
+      await pool.query("INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3) ON CONFLICT (username) DO NOTHING", [userId, username, hashPassword(password)]);
+      const result = await pool.query("SELECT id, username FROM users WHERE username = $1", [username]);
+      if (!result.rowCount) return res.status(400).json({ error: "Username taken." });
+      return res.status(201).json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
+    }
+    
+    res.status(201).json({ user, token: `token_${userId}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Signup failed." });
+  }
+});
+
 async function ensureDb() {
   if (hasPostgres) {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS members (
           id TEXT PRIMARY KEY,
@@ -103,6 +152,15 @@ async function writeDb(data) {
 
 function createId() {
   return Math.random().toString(36).slice(2, 10);
+}
+
+// Simple password hashing (for demo - use bcrypt in production)
+function hashPassword(pwd) {
+  return Buffer.from(pwd).toString('base64');
+}
+
+function verifyPassword(pwd, hash) {
+  return hashPassword(pwd) === hash;
 }
 
 app.get("/api/state", async (_req, res) => {

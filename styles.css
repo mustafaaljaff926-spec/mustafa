@@ -1052,12 +1052,14 @@ html[data-theme="light"] .task-card.is-dragging {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 14px;
-  margin: 0 0 10px;
-  padding-left: 8px;
+  margin: 0;
+  padding: 0;
   line-height: 1.4;
   letter-spacing: -0.01em;
   color: var(--text);
   transition: color 0.2s ease;
+  flex: 1;
+  word-break: break-word;
 }
 
 .task-card:hover .task-card-title {
@@ -1107,6 +1109,46 @@ html[data-theme="light"] .task-card.is-dragging {
 }
 
 .status-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.status-cycle-btn {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid var(--accent-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.status-cycle-btn:hover:not(.disabled) {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+
+.status-cycle-btn:active:not(.disabled) {
+  transform: scale(0.98);
+}
+
+.status-cycle-btn.disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

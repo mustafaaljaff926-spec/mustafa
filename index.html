@@ -240,6 +240,29 @@
     </form>
   </dialog>
 
+  <dialog class="modal modal-sm" id="loginModal">
+    <form class="modal-form" id="loginForm">
+      <div class="modal-head">
+        <h2>Login</h2>
+        <p class="modal-lead">Enter your credentials or create a new account.</p>
+      </div>
+      <label class="field">
+        <span>Username</span>
+        <input type="text" id="loginUsername" required placeholder="Username" />
+      </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" id="loginPassword" required placeholder="Password" />
+      </label>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary" id="loginSubmitBtn">Login</button>
+        <button type="button" class="btn btn-ghost" id="signupToggleBtn">Sign up instead</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast-container" id="toastContainer"></div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>
