@@ -228,10 +228,38 @@ function renderBoard() {
     .join("");
 
   els.board.querySelectorAll(".task-card").forEach((card) => {
-    card.addEventListener("click", () => openTaskModal(card.dataset.taskId));
+    card.addEventListener("click", (e) => {
+      // Don't open modal if clicking status button
+      if (e.target.closest(".status-cycle-btn")) return;
+      openTaskModal(card.dataset.taskId);
+    });
     card.addEventListener("dragstart", (e) => {
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("taskId", card.dataset.taskId);
+    });
+  });
+
+  // Status cycle button handlers
+  els.board.querySelectorAll(".status-cycle-btn").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const taskId = btn.dataset.taskId;
+      const currentStatus = btn.dataset.status;
+      const statusCycle = ["todo", "progress", "done"];
+      const currentIdx = statusCycle.indexOf(currentStatus);
+      const newStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
+      
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task || !isAdmin()) return;
+      
+      task.status = newStatus;
+      btn.dataset.status = newStatus;
+      btn.textContent = STATUS_META[newStatus];
+      
+      // Update server
+      await api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
+      renderAll();
+      showToast(`Task moved to ${STATUS_META[newStatus]}`, "success");
     });
   });
 
@@ -558,30 +586,6 @@ function initEvents() {
   });
   document.querySelectorAll("[data-close-member]").forEach((btn) => {
     btn.addEventListener("click", () => els.memberModal.close());
-  });
-
-  // Status cycle button
-  document.addEventListener("click", (e) => {
-    if (e.target.matches(".status-cycle-btn")) {
-      e.stopPropagation();
-      const taskId = e.target.dataset.taskId;
-      const currentStatus = e.target.dataset.status;
-      const statusCycle = ["todo", "progress", "done"];
-      const currentIdx = statusCycle.indexOf(currentStatus);
-      const newStatus = statusCycle[(currentIdx + 1) % statusCycle.length];
-      
-      const task = state.tasks.find((t) => t.id === taskId);
-      if (!task || !isAdmin()) return;
-      
-      task.status = newStatus;
-      e.target.dataset.status = newStatus;
-      e.target.textContent = STATUS_META[newStatus];
-      
-      // Update server
-      api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) });
-      renderAll();
-      showToast(`Task moved to ${STATUS_META[newStatus]}`, "success");
-    }
   });
 
   els.btnThemeToggle.addEventListener("click", () => {
