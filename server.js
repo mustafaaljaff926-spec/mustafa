@@ -33,8 +33,8 @@ app.post("/api/login", async (req, res) => {
       return res.json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
     }
     
-    // Demo: owner is admin, others are members
-    const role = username === "owner" ? "admin" : "member";
+    // Demo: Mustafa_Jaff is owner/admin, others are members
+    const role = username === "Mustafa_Jaff" ? "admin" : "member";
     res.json({ user: { id: createId(), username, role }, token: `token_${Date.now()}` });
   } catch (err) {
     res.status(500).json({ error: err.message || "Login failed." });
@@ -48,8 +48,8 @@ app.post("/api/signup", async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: "Username and password required." });
     
     const userId = createId();
-    // New signups are members by default, unless they're 'owner'
-    const role = username === "owner" ? "admin" : "member";
+    // Mustafa_Jaff is the owner/admin, others are members
+    const role = username === "Mustafa_Jaff" ? "admin" : "member";
     const user = { id: userId, username, role };
     
     if (hasPostgres) {
