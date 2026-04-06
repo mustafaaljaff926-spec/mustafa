@@ -104,10 +104,10 @@ async function login(username, password, isSignup = false) {
     localStorage.setItem("authToken", data.token);
     localStorage.setItem("authUser", JSON.stringify(data.user));
     state.userName = data.user.username;
-    state.role = "admin";
+    state.role = data.user.role || "member"; // Use role from server
     els.loginModal.close();
     renderAll();
-    showToast(`Welcome, ${username}!`, "success");
+    showToast(`Welcome, ${username}! You are a ${state.role}`, "success");
   } catch (err) {
     showToast(err.message, "error");
   }
@@ -502,7 +502,7 @@ function initEvents() {
   if (authToken && authUser) {
     const user = JSON.parse(authUser);
     state.userName = user.username;
-    state.role = "admin";
+    state.role = user.role || "member"; // Use role from stored user data
   } else {
     // Show login modal if not authenticated
     state.userName = "";
@@ -542,8 +542,7 @@ function initEvents() {
     logoutBtn.addEventListener("click", logout);
   }
 
-  state.userName = state.userName || "owner";
-  state.role = state.role || "admin";
+  // Keep current role, don't override with "admin"
   localStorage.setItem("dashboardUserName", state.userName);
   localStorage.setItem("dashboardRole", state.role);
 

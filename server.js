@@ -28,13 +28,14 @@ app.post("/api/login", async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: "Username and password required." });
     
     if (hasPostgres) {
-      const result = await pool.query("SELECT id, username FROM users WHERE username = $1 AND password_hash = $2", [username, hashPassword(password)]);
+      const result = await pool.query("SELECT id, username, role FROM users WHERE username = $1 AND password_hash = $2", [username, hashPassword(password)]);
       if (!result.rowCount) return res.status(401).json({ error: "Invalid credentials." });
       return res.json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
     }
     
-    // Demo: allow any username/password (for local testing)
-    res.json({ user: { id: createId(), username }, token: `token_${Date.now()}` });
+    // Demo: owner is admin, others are members
+    const role = username === "owner" ? "admin" : "member";
+    res.json({ user: { id: createId(), username, role }, token: `token_${Date.now()}` });
   } catch (err) {
     res.status(500).json({ error: err.message || "Login failed." });
   }
@@ -47,11 +48,13 @@ app.post("/api/signup", async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: "Username and password required." });
     
     const userId = createId();
-    const user = { id: userId, username };
+    // New signups are members by default, unless they're 'owner'
+    const role = username === "owner" ? "admin" : "member";
+    const user = { id: userId, username, role };
     
     if (hasPostgres) {
-      await pool.query("INSERT INTO users (id, username, password_hash) VALUES ($1, $2, $3) ON CONFLICT (username) DO NOTHING", [userId, username, hashPassword(password)]);
-      const result = await pool.query("SELECT id, username FROM users WHERE username = $1", [username]);
+      await pool.query("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4) ON CONFLICT (username) DO NOTHING", [userId, username, hashPassword(password), role]);
+      const result = await pool.query("SELECT id, username, role FROM users WHERE username = $1", [username]);
       if (!result.rowCount) return res.status(400).json({ error: "Username taken." });
       return res.status(201).json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
     }
@@ -69,6 +72,7 @@ async function ensureDb() {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
