@@ -1072,6 +1072,25 @@ html[data-theme="light"] .task-card.is-dragging {
   padding-left: 8px;
 }
 
+.status-btn {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+  opacity: 0.7;
+}
+
+.status-btn:hover {
+  opacity: 1;
+  background: var(--accent);
+  color: white;
+  transform: scale(1.1);
+}
+
 .tag {
   font-size: 10px;
   font-weight: 700;

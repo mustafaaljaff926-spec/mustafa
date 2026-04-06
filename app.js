@@ -9,6 +9,7 @@ const state = {
   role: localStorage.getItem("dashboardRole") || "member",
   userName: localStorage.getItem("dashboardUserName") || "",
   currentMemberId: null,
+  search: "",
 };
 
 const els = {
@@ -32,6 +33,7 @@ const els = {
   btnNewTask: document.getElementById("btnNewTask"),
   btnNewTaskBottom: document.getElementById("btnNewTaskBottom"),
   btnThemeToggle: document.getElementById("btnThemeToggle"),
+  searchInput: document.getElementById("searchInput"),
   addMemberForm: document.getElementById("addMemberForm"),
   newMemberName: document.getElementById("newMemberName"),
   quickAddMember: document.getElementById("quickAddMember"),
@@ -80,14 +82,18 @@ function filteredTasks() {
   const visibleTasks = isAdmin()
     ? state.tasks
     : state.tasks.filter((t) => state.currentMemberId && t.assignees.includes(state.currentMemberId));
-  if (state.filter === "high") return visibleTasks.filter((t) => t.priority === "high");
+  let filtered = visibleTasks;
+  if (state.filter === "high") filtered = filtered.filter((t) => t.priority === "high");
   if (state.filter === "dueSoon") {
     const now = new Date();
     const in7 = new Date();
     in7.setDate(now.getDate() + 7);
-    return visibleTasks.filter((t) => t.due && new Date(t.due) <= in7);
+    filtered = filtered.filter((t) => t.due && new Date(t.due) <= in7);
   }
-  return visibleTasks;
+  if (state.search) {
+    filtered = filtered.filter((t) => t.title.toLowerCase().includes(state.search.toLowerCase()));
+  }
+  return filtered;
 }
 
 function renderRoleBar() {
@@ -155,6 +161,7 @@ function renderBoard() {
                   <span class="tag">${STATUS_META[task.status]}</span>
                   <span class="tag">${priorityLabel(task.priority)}</span>
                   ${task.due ? `<span class="tag tag-due">Due ${task.due}</span>` : ""}
+                  <button class="status-btn" data-task-id="${task.id}" title="Change status">▶</button>
                 </div>
               </article>`
             )
@@ -469,9 +476,30 @@ function initEvents() {
     btn.addEventListener("click", () => els.memberModal.close());
   });
 
+  // Status change button
+  document.addEventListener("click", (e) => {
+    if (e.target.matches(".status-btn")) {
+      const taskId = e.target.dataset.taskId;
+      const task = state.tasks.find((t) => t.id === taskId);
+      if (!task || !isAdmin()) return;
+      const statuses = ["todo", "progress", "done"];
+      const currentIndex = statuses.indexOf(task.status);
+      const nextIndex = (currentIndex + 1) % statuses.length;
+      task.status = statuses[nextIndex];
+      // Update server
+      api(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: task.status }) });
+      renderAll();
+    }
+  });
+
   els.btnThemeToggle.addEventListener("click", () => {
     const html = document.documentElement;
     html.dataset.theme = html.dataset.theme === "light" ? "dark" : "light";
+  });
+
+  els.searchInput.addEventListener("input", (e) => {
+    state.search = e.target.value.trim();
+    renderAll();
   });
 
   els.mobileMenuBtn.addEventListener("click", () => {
