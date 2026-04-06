@@ -1,0 +1,32 @@
+{
+  "members": [
+    {
+      "id": "r2ps8tl1",
+      "name": "mustafa",
+      "role": "member"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "y68237hh",
+      "title": "calls",
+      "description": "",
+      "status": "todo",
+      "priority": "normal",
+      "due": "2026-04-07",
+      "followUp": "2026-04-29",
+      "assignees": []
+    },
+    {
+      "id": "ogiymbzp",
+      "title": "Friend task",
+      "description": "Needs approval",
+      "status": "todo",
+      "priority": "normal",
+      "due": "",
+      "followUp": "",
+      "assignees": []
+    }
+  ],
+  "pendingTasks": []
+}
