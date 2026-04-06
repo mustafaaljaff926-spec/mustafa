@@ -670,6 +670,53 @@ body.ui-ready .sidebar-header .logo {
   width: auto;
 }
 
+.sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px;
+  margin-top: auto;
+}
+
+.btn-logout-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.btn-logout-sidebar:hover {
+  background: rgba(255, 71, 87, 0.1);
+  color: #ff4757;
+}
+
+.btn-logout-sidebar .nav-icon {
+  display: flex;
+  align-items: center;
+  width: 30px;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-logout-sidebar .nav-text {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 0.2s, width 0s 0.2s;
+}
+
+.sidebar:hover .btn-logout-sidebar .nav-text {
+  opacity: 1;
+  width: auto;
+  transition: opacity 0.2s 0.05s, width 0s;
+}
+
 /* —— Main workspace —— */
 .main {
   flex: 1;

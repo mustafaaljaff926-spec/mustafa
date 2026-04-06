@@ -35,6 +35,7 @@ const els = {
   btnNewTaskBottom: document.getElementById("btnNewTaskBottom"),
   btnThemeToggle: document.getElementById("btnThemeToggle"),
   btnLogout: document.getElementById("btnLogout"),
+  btnLogoutSidebar: document.getElementById("btnLogoutSidebar"),
   searchInput: document.getElementById("searchInput"),
   loginModal: document.getElementById("loginModal"),
   loginForm: document.getElementById("loginForm"),
@@ -672,6 +673,10 @@ function initEvents() {
   });
 
   els.btnLogout.addEventListener("click", () => {
+    logout();
+  });
+
+  els.btnLogoutSidebar.addEventListener("click", () => {
     logout();
   });
 
