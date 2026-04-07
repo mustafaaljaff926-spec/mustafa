@@ -48,5 +48,13 @@
       "assignees": []
     }
   ],
-  "pendingTasks": []
+  "pendingTasks": [],
+  "users": [
+    {
+      "id": "be8ryc2a",
+      "username": "testuser",
+      "password_hash": "MTIz",
+      "role": "admin"
+    }
+  ]
 }

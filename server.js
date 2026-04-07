@@ -33,9 +33,11 @@ app.post("/api/login", async (req, res) => {
       return res.json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
     }
     
-    // Demo: Mustafa_Jaff is owner/admin, others are members
-    const role = username === "Mustafa_Jaff" ? "admin" : "member";
-    res.json({ user: { id: createId(), username, role }, token: `token_${Date.now()}` });
+    // Demo mode: Check persisted users
+    const users = await readUsers();
+    const user = users.find(u => u.username === username && u.password_hash === hashPassword(password));
+    if (!user) return res.status(401).json({ error: "Invalid credentials." });
+    res.json({ user: { id: user.id, username: user.username, role: user.role }, token: `token_${user.id}` });
   } catch (err) {
     res.status(500).json({ error: err.message || "Login failed." });
   }
@@ -59,7 +61,16 @@ app.post("/api/signup", async (req, res) => {
       return res.status(201).json({ user: result.rows[0], token: `token_${result.rows[0].id}` });
     }
     
-    res.status(201).json({ user, token: `token_${userId}` });
+    // Demo mode: Persist to data.json
+    const users = await readUsers();
+    const existingUser = users.find(u => u.username === username);
+    if (existingUser) {
+      return res.status(400).json({ error: "Username taken." });
+    }
+    const newUser = { id: userId, username, password_hash: hashPassword(password), role };
+    users.push(newUser);
+    await writeUsers(users);
+    res.status(201).json({ user: { id: newUser.id, username: newUser.username, role: newUser.role }, token: `token_${userId}` });
   } catch (err) {
     res.status(500).json({ error: err.message || "Signup failed." });
   }
@@ -120,6 +131,7 @@ async function ensureDb() {
       members: [],
       tasks: [],
       pendingTasks: [],
+      users: [],
     };
     await fs.writeFile(DB_PATH, JSON.stringify(seed, null, 2), "utf8");
   }
@@ -154,6 +166,27 @@ async function writeDb(data) {
   await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), "utf8");
 }
 
+async function readUsers() {
+  await ensureDb();
+  if (hasPostgres) {
+    const result = await pool.query("SELECT id, username, role FROM users ORDER BY created_at DESC");
+    return result.rows;
+  }
+  const raw = await fs.readFile(DB_PATH, "utf8");
+  const data = JSON.parse(raw);
+  return data.users || [];
+}
+
+async function writeUsers(users) {
+  if (hasPostgres) {
+    throw new Error("writeUsers is not used for Postgres mode");
+  }
+  const raw = await fs.readFile(DB_PATH, "utf8");
+  const data = JSON.parse(raw);
+  data.users = users;
+  await fs.writeFile(DB_PATH, JSON.stringify(data, null, 2), "utf8");
+}
+
 function createId() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -173,8 +206,9 @@ app.get("/api/users", async (_req, res) => {
       const result = await pool.query("SELECT id, username, role FROM users ORDER BY created_at DESC");
       return res.json({ users: result.rows });
     }
-    // Return empty for demo mode (users stored in auth only)
-    res.json({ users: [] });
+    // Demo mode: Return persisted users
+    const users = await readUsers();
+    res.json({ users: users.map(u => ({ id: u.id, username: u.username, role: u.role })) });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to fetch users." });
   }
@@ -193,7 +227,13 @@ app.patch("/api/users/:id/role", async (req, res) => {
       return res.json(result.rows[0]);
     }
     
-    res.status(400).json({ error: "Role updates require PostgreSQL." });
+    // Demo mode: Update persisted users
+    const users = await readUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+    if (userIndex === -1) return res.status(404).json({ error: "User not found." });
+    users[userIndex].role = role;
+    await writeUsers(users);
+    res.json({ id: users[userIndex].id, username: users[userIndex].username, role: users[userIndex].role });
   } catch (err) {
     res.status(500).json({ error: err.message || "Failed to update user role." });
   }
