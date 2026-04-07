@@ -8,6 +8,7 @@ services:
     name: my-dashboard
     env: node
     plan: free
+    root: .
     buildCommand: npm install
     startCommand: npm start
     autoDeploy: true
