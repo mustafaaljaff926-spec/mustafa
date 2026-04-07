@@ -365,7 +365,6 @@ function renderMembers() {
     .map((m) => `<label><input type="checkbox" value="${m.id}" /><span>${m.name}</span></label>`)
     .join("");
 }
-}
 
 function renderApprovals() {
   if (!isAdmin()) {
@@ -521,7 +520,7 @@ function initEvents() {
   } else {
     // Show login modal if not authenticated
     state.userName = "";
-    state.role = "member";
+    state.role = "admin"; // Default to admin for demo purposes, but can be set to "member" if desired
     els.loginModal.showModal();
   }
   
